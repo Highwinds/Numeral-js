@@ -19,6 +19,7 @@
         currentLanguage = 'en',
         zeroFormat = null,
         defaultFormat = '0,0',
+        suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'],
         // check for nodeJS
         hasModule = (typeof module !== 'undefined' && module.exports);
 
@@ -60,7 +61,7 @@
     ************************************/
 
     // determine what type of formatting we need to do
-    function formatNumeral (n, format) {
+    function formatNumeral (n, format, unit) {
         var output;
 
         // figure out what kind of format we are dealing with
@@ -71,7 +72,7 @@
         } else if (format.indexOf(':') > -1) { // time
             output = formatTime(n, format);
         } else { // plain ol' numbers or bytes
-            output = formatNumber(n._value, format);
+            output = formatNumber(n._value, format, unit);
         }
 
         // return string
@@ -85,7 +86,6 @@
             millionRegExp,
             billionRegExp,
             trillionRegExp,
-            suffixes = ['KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'],
             bytesMultiplier = false,
             power;
 
@@ -106,8 +106,8 @@
                 trillionRegExp = new RegExp('[^a-zA-Z]' + languages[currentLanguage].abbreviations.trillion + '(?:\\)|(\\' + languages[currentLanguage].currency.symbol + ')?(?:\\))?)?$');
 
                 // see if bytes are there so that we can multiply to the correct number
-                for (power = 0; power <= suffixes.length; power++) {
-                    bytesMultiplier = (string.indexOf(suffixes[power]) > -1) ? Math.pow(1024, power + 1) : false;
+                for (power = 1; power <= suffixes.length; power++) {
+                    bytesMultiplier = (string.indexOf(suffixes[power]) > -1) ? Math.pow(1024, power) : false;
 
                     if (bytesMultiplier) {
                         break;
@@ -218,18 +218,59 @@
         return Number(seconds);
     }
 
-    function formatNumber (value, format) {
+    function getUnit (value, format) {
+        var unitStruct = { multiplier: 0, suffix: '' },
+            power,
+            min,
+            max,
+            abs = Math.abs(value);
+
+        if (format.indexOf('a') !== -1) {
+            if (abs >= Math.pow(10, 12)) {
+                // trillion
+                unitStruct.suffix = languages[currentLanguage].abbreviations.trillion;
+                unitStruct.multiplier = 4;
+            } else if (abs < Math.pow(10, 12) && abs >= Math.pow(10, 9)) {
+                // billion
+                unitStruct.suffix = languages[currentLanguage].abbreviations.billion;
+                unitStruct.multiplier = 3;
+            } else if (abs < Math.pow(10, 9) && abs >= Math.pow(10, 6)) {
+                // million
+                unitStruct.suffix = languages[currentLanguage].abbreviations.million;
+                unitStruct.multiplier = 2;
+            } else if (abs < Math.pow(10, 6) && abs >= Math.pow(10, 3)) {
+                // thousand
+                unitStruct.suffix = languages[currentLanguage].abbreviations.thousand;
+                unitStruct.multiplier = 1;
+            }
+        } else if (format.indexOf('b') !== -1) {
+            for (power = 0; power <= suffixes.length; power++) {
+                min = Math.pow(1024, power);
+                max = Math.pow(1024, power+1);
+
+                if (value >= min && value < max) {
+                    
+                    if (min > 0) {
+                        unitStruct.multiplier = power;
+                    }
+                    break;
+                }
+            }
+            unitStruct.suffix = suffixes[unitStruct.multiplier];
+        }
+
+        return unitStruct;
+    }
+
+    function formatNumber (value, format, unit) {
         var negP = false,
             signed = false,
             optDec = false,
             abbr = '',
             bytes = '',
             ord = '',
-            abs = Math.abs(value),
-            suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'],
-            min,
-            max,
-            power,
+            suffixIndex,
+            unitStruct,
             w,
             precision,
             thousands,
@@ -260,22 +301,25 @@
                     format = format.replace('a', '');
                 }
 
-                if (abs >= Math.pow(10, 12)) {
-                    // trillion
-                    abbr = abbr + languages[currentLanguage].abbreviations.trillion;
-                    value = value / Math.pow(10, 12);
-                } else if (abs < Math.pow(10, 12) && abs >= Math.pow(10, 9)) {
-                    // billion
-                    abbr = abbr + languages[currentLanguage].abbreviations.billion;
-                    value = value / Math.pow(10, 9);
-                } else if (abs < Math.pow(10, 9) && abs >= Math.pow(10, 6)) {
-                    // million
-                    abbr = abbr + languages[currentLanguage].abbreviations.million;
-                    value = value / Math.pow(10, 6);
-                } else if (abs < Math.pow(10, 6) && abs >= Math.pow(10, 3)) {
-                    // thousand
-                    abbr = abbr + languages[currentLanguage].abbreviations.thousand;
-                    value = value / Math.pow(10, 3);
+                if (unit !== undefined) {
+                    unitStruct = { multiplier: 0, suffix: unit };
+                    if (unit === languages[currentLanguage].abbreviations.trillion) {
+                        unitStruct.multiplier = 4;
+                    } else if (unit === languages[currentLanguage].abbreviations.billion) {
+                        unitStruct.multiplier = 3;
+                    } else if (unit === languages[currentLanguage].abbreviations.million) {
+                        unitStruct.multiplier = 2;
+                    } else if (unit === languages[currentLanguage].abbreviations.thousand) {
+                        unitStruct.multiplier = 1;
+                    } else {
+                        unitStruct.suffix = '';
+                    }
+                    value = value / Math.pow(10, 3 * unitStruct.multiplier);
+                    abbr = abbr + unitStruct.suffix;
+                } else {
+                    unitStruct = getUnit(value, 'a');
+                    value = value / Math.pow(10, 3 * unitStruct.multiplier);
+                    abbr = abbr + unitStruct.suffix;
                 }
             }
 
@@ -289,17 +333,16 @@
                     format = format.replace('b', '');
                 }
 
-                for (power = 0; power <= suffixes.length; power++) {
-                    min = Math.pow(1024, power);
-                    max = Math.pow(1024, power+1);
-
-                    if (value >= min && value < max) {
-                        bytes = bytes + suffixes[power];
-                        if (min > 0) {
-                            value = value / min;
-                        }
-                        break;
+                if (unit !== undefined) {
+                    suffixIndex = suffixes.indexOf(unit);
+                    if (suffixIndex !== -1) {
+                        value = value / Math.pow(1024, suffixIndex);
+                        bytes = bytes + unit;
                     }
+                } else {
+                    unitStruct = getUnit(value, 'b');
+                    bytes = bytes + unitStruct.suffix;
+                    value = value / Math.pow(1024, unitStruct.multiplier);
                 }
             }
 
@@ -464,8 +507,12 @@
             return numeral(this);
         },
 
-        format : function (inputString) {
-            return formatNumeral(this, inputString ? inputString : defaultFormat);
+        format : function (inputString, unit) {
+            return formatNumeral(this, inputString ? inputString : defaultFormat, unit);
+        },
+
+        unit: function(inputString) {
+            return getUnit(this, inputString ? inputString : defaultFormat);
         },
 
         unformat : function (inputString) {
