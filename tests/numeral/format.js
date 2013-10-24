@@ -34,6 +34,7 @@ exports.format = {
     },
     numbers: function (test) {
         var tests = [
+                // Automatic unit conversion
                 [10000,'0,0.0000','10,000.0000'],
                 [10000.23,'0,0','10,000'],
                 [-10000,'0,0.0','-10,000.0'],
@@ -64,14 +65,24 @@ exports.format = {
                 [1,'0o','1st'],
                 [52,'0 o','52 nd'],
                 [23,'0o','23rd'],
-                [100,'0o','100th']
+                [100,'0o','100th'],
+
+                // Manually provided units
+                [2000000000,'0.0a','m','2000.0m'],
+                [2000000000,'0.0a','k','2000000.0k'],
+                [1000000,'0a','k','1000k'],
+                [2000000000000,'0a','k','2000000000k']
             ],
             i;
 
         test.expect(tests.length);
 
         for (i = 0; i < tests.length; i++) {
-            test.strictEqual(numeral(tests[i][0]).format(tests[i][1]), tests[i][2], tests[i][1]);
+            if (tests[i].length === 3) {
+                test.strictEqual(numeral(tests[i][0]).format(tests[i][1]), tests[i][2], tests[i][1]);
+            } else if (tests[i].length === 4) {
+                test.strictEqual(numeral(tests[i][0]).format(tests[i][1], tests[i][2]), tests[i][3], tests[i][1] + ' in ' + tests[i][2]);
+            }
         }
 
         test.done();
@@ -100,19 +111,31 @@ exports.format = {
 
     bytes: function (test) {
         var tests = [
+                // Automatic unit conversion
                 [100,'0b','100B'],
                 [1024*2,'0 b','2 KB'],
                 [1024*1024*5,'0b','5MB'],
                 [1024*1024*1024*7.343,'0.[0] b','7.3 GB'],
                 [1024*1024*1024*1024*3.1536544,'0.000b','3.154TB'],
-                [1024*1024*1024*1024*1024*2.953454534534,'0b','3PB']
+                [1024*1024*1024*1024*1024*2.953454534534,'0b','3PB'],
+
+                // Manually provided units
+                [1024*1024*3,'0b','KB',3*1024+'KB'],
+                [1024*1024*3,'0b','potato',3*1024*1024+''],
+                [1024*1024*1024*3,'0b','KB',3*1024*1024+'KB'],
+                [1024*1024,'0.00000b','GB',(1024*1024/Math.pow(1024,3)).toFixed(5)+'GB'],
+                [1,'0.000b','YB','0.000YB']
             ],
             i;
 
         test.expect(tests.length);
 
         for (i = 0; i < tests.length; i++) {
-            test.strictEqual(numeral(tests[i][0]).format(tests[i][1]), tests[i][2], tests[i][1]);
+            if (tests[i].length === 3) {
+                test.strictEqual(numeral(tests[i][0]).format(tests[i][1]), tests[i][2], tests[i][1]);
+            } else if (tests[i].length === 4) {
+                test.strictEqual(numeral(tests[i][0]).format(tests[i][1], tests[i][2]), tests[i][3], tests[i][1] + ' in ' + tests[i][2]);
+            }
         }
 
         test.done();
